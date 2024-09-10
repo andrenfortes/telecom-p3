@@ -13,54 +13,55 @@ def decode(sig):
         if len(signal) < samples_per_bit:
             raise ValueError("Signal length is too short for the given sample rate and bit rate.")
 
-        for i in range(0, len(signal) - samples_per_bit + 1, samples_per_bit):
-            if i + mid_sample_pos >= len(signal):
+        for i in range(3, len(signal) - samples_per_bit + 1, samples_per_bit):
+            if i + samples_per_bit >= len(signal):
                 break
 
             current_sample = signal[i]
-            next_sample = signal[i + mid_sample_pos]
+            next_sample = signal[i + samples_per_bit]
 
-            if current_sample == 0 and next_sample == 1:
+            if current_sample < next_sample:
                 decoded_bits.append(0)
-            elif current_sample == 1 and next_sample == 0:
+            elif current_sample > next_sample:
                 decoded_bits.append(1)
             else:
-                decoded_bits.append(-1)  # Invalid transition
+                decoded_bits.append(current_sample)
 
-        cleaned_bits = [bit for bit in decoded_bits if bit != -1]
-        print(f"Decoded bits: {cleaned_bits}")  # Debug statement
-        return cleaned_bits
+        print(f"Decoded bits: {decoded_bits}")  # Debug statement
+        return decoded_bits
 
     def find_sfd_end(decoded_bits):
-        sfd_pattern = [1, 0, 1, 0, 1, 0, 1, 1]
+        # Padrão do SFD
+        sfd_pattern = [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1]
         sfd_len = len(sfd_pattern)
-        max_mismatches = 2
 
+        # Percorre a lista de bits
         for i in range(len(decoded_bits) - sfd_len + 1):
-            mismatches = sum(1 for j in range(sfd_len) if decoded_bits[i + j] != sfd_pattern[j])
-            if mismatches <= max_mismatches:
-                print(f"SFD found at index: {i + sfd_len}")  # Debug statement
-                return i + sfd_len
+            # Verifica se os bits atuais correspondem ao padrão do SFD
+            if decoded_bits[i:i + sfd_len] == sfd_pattern:
+                print(f"SFD encontrado na posição {i}")
+                return i + sfd_len  # Retorna a posição após o fim do SFD
 
-        raise ValueError("Start Frame Delimiter (SFD) not found in the decoded bits!")
+        print("SFD não encontrado")
+        return -1  # Retorna -1 se o SFD não for encontrado
 
     def convert_bits_to_bytes(bits):
         frame_bytes = []
-        byte = 0
+        byte = ''
         bit_count = 0
         for bit in bits:
-            byte = (byte << 1) | bit
+            byte += str(bit)
             bit_count += 1
             if bit_count == 8:
-                frame_bytes.append(byte)
-                byte = 0
+                frame_bytes.append(int(byte[::-1], 2))
+                byte = ''
                 bit_count = 0
-        if bit_count > 0:
-            frame_bytes.append(byte << (8 - bit_count))  # Pad remaining bits
+
         print(f"Converted bytes: {frame_bytes}")  # Debug statement
         return bytes(frame_bytes)
 
     def extract_frame_bytes(decoded_bits, sfd_end_index):
+        print("DECODE: ", decoded_bits[sfd_end_index:sfd_end_index+8])
         frame_bits = decoded_bits[sfd_end_index:]
         return convert_bits_to_bytes(frame_bits)
 
@@ -73,13 +74,6 @@ def decode(sig):
         return bytes()
 
     frame_bytes = extract_frame_bytes(decoded_bits, sfd_end_index)
-
-    mac_address_length = 6
-    if len(frame_bytes) >= mac_address_length:
-        frame_bytes = frame_bytes[mac_address_length:]
-    
-    if len(frame_bytes) > 0 and frame_bytes[0] == 0x00:
-        frame_bytes = frame_bytes[1:]
 
     print(f"Final decoded frame bytes: {frame_bytes}")  # Debug statement
     return frame_bytes
