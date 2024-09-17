@@ -27,3 +27,4 @@ def decode(sig):
         internet_frame.append(valor_int)
 
     return bytes(internet_frame[:-1])
+
